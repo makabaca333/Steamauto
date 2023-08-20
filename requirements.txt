@@ -3,6 +3,5 @@ apprise
 colorama
 colorlog
 pyjson5
-beautifulsoup4
 chardet
-rsa
+steamio

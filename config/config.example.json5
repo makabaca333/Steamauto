@@ -1,12 +1,4 @@
 {
-  // 登录Steam时是否开启SSL验证，正常情况下不建议关闭SSL验证
-  "steam_login_ignore_ssl_error": false,
-  
-  // 是否开启本地加速功能
-  // 本地加速功能并非100%可用, 若开启后仍然无法正常连接Steam属于正常情况, 最优解决方案是使用海外服务器
-  // 请注意：开启此功能必须关闭Steam登录SSL验证，即steam_login_ignore_ssl_error必须设置为true
-  "steam_local_accelerate": false,
-
   // 是否使用Steam代理功能(该功能只会代理Steam)
   "use_proxies": false,
 
@@ -96,6 +88,17 @@
     // 每次检查报价列表的间隔（轮询间隔），单位为秒
     "interval": 300
   },
+
   // 是否开启开发者模式，具体功能请查看代码，非开发者请勿开启！开启后无法正常使用！
-  "development_mode": false
+  "development_mode": false,
+  
+  // 该配置在4.0版本暂时失效！！！请等待添加
+  // 登录Steam时是否开启SSL验证，正常情况下不建议关闭SSL验证
+  "steam_login_ignore_ssl_error": false,
+  
+  // 该配置在4.0版本暂时失效！！！请等待添加
+  // 是否开启本地加速功能
+  // 本地加速功能并非100%可用, 若开启后仍然无法正常连接Steam属于正常情况, 最优解决方案是使用海外服务器
+  // 请注意：开启此功能必须关闭Steam登录SSL验证，即steam_login_ignore_ssl_error必须设置为true
+  "steam_local_accelerate": false,
 }

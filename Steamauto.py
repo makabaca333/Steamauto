@@ -1,5 +1,5 @@
+import asyncio
 import os
-import pickle
 import shutil
 import signal
 import sys
@@ -9,28 +9,21 @@ from ssl import SSLCertVerificationError
 
 import pyjson5 as json
 import requests
+import steam
 from requests.exceptions import SSLError
 
 from plugins.BuffAutoAcceptOffer import BuffAutoAcceptOffer
 from plugins.BuffAutoOnSale import BuffAutoOnSale
 from plugins.SteamAutoAcceptOffer import SteamAutoAcceptOffer
 from plugins.UUAutoAcceptOffer import UUAutoAcceptOffer
-from steampy.client import SteamClient
-from steampy.exceptions import ApiException, CaptchaRequired, InvalidCredentials
-from steampy.utils import ping_proxy
 from utils.logger import handle_caught_exception
-from utils.static import (
-    CONFIG_FILE_PATH,
-    CONFIG_FOLDER,
-    DEFAULT_STEAM_ACCOUNT_JSON,
-    DEV_FILE_FOLDER,
-    EXAMPLE_CONFIG_FILE_PATH,
-    SESSION_FOLDER,
-    STEAM_ACCOUNT_INFO_FILE_PATH,
-    UU_TOKEN_FILE_PATH,
-    UU_ARG_FILE_PATH,
-)
-from utils.tools import accelerator, compare_version, get_encoding, logger, pause, exit_code
+from utils.static import (CONFIG_FILE_PATH, CONFIG_FOLDER,
+                          DEFAULT_STEAM_ACCOUNT_JSON, DEV_FILE_FOLDER,
+                          EXAMPLE_CONFIG_FILE_PATH, SESSION_FOLDER,
+                          STEAM_ACCOUNT_INFO_FILE_PATH, UU_ARG_FILE_PATH,
+                          UU_TOKEN_FILE_PATH)
+from utils.tools import (compare_version, exit_code, get_encoding, logger,
+                         pause, ping_proxy)
 
 current_version = "3.2.3"
 
@@ -73,6 +66,7 @@ def set_exit_code(code):
 def login_to_steam():
     global config
     steam_client = None
+    relogin = True
     with open(STEAM_ACCOUNT_INFO_FILE_PATH, "r", encoding=get_encoding(STEAM_ACCOUNT_INFO_FILE_PATH)) as f:
         try:
             acc = json.load(f)
@@ -81,43 +75,44 @@ def login_to_steam():
             logger.error("检测到" + STEAM_ACCOUNT_INFO_FILE_PATH + "格式错误, 请检查配置文件格式是否正确! ")
             pause()
             return None
-    steam_session_path = os.path.join(SESSION_FOLDER, acc.get("steam_username").lower() + ".pkl")
-    if not os.path.exists(steam_session_path):
-        logger.info("检测到首次登录Steam，正在尝试登录...登录完成后会自动缓存session")
-    else:
-        logger.info("检测到缓存的steam_session, 正在尝试登录...")
-        try:
-            with open(steam_session_path, "rb") as f:
-                client = pickle.load(f)
-                if config["steam_login_ignore_ssl_error"]:
-                    logger.warning("警告: 已经关闭SSL验证, 请确保你的网络安全")
-                    client._session.verify = False
-                    requests.packages.urllib3.disable_warnings()
-                else:
-                    client._session.verify = True
-                if config["steam_local_accelerate"]:
-                    logger.info("已经启用Steamauto内置加速")
-                    client._session.auth = accelerator()
-
-                if client.is_session_alive():
-                    logger.info("登录成功")
-                    steam_client = client
-        except requests.exceptions.ConnectionError as e:
-            handle_caught_exception(e)
-            logger.error("使用缓存的session登录失败!可能是网络异常")
-            steam_client = None
-        except EOFError as e:
-            handle_caught_exception(e)
-            shutil.rmtree(SESSION_FOLDER)
-            steam_client = None
-            logger.error("session文件异常.已删除session文件夹")
-        except AssertionError as e:
-            handle_caught_exception(e)
-            if config["steam_local_accelerate"]:
-                logger.error("由于内置加速问题,暂时无法登录.请稍等10分钟后再进行登录,或者关闭内置加速功能！")
-            else:
-                logger.error("未知登录错误,可能是由于网络问题?")
-    if steam_client is None:
+    # TODO: 支持缓存session
+    # steam_session_path = os.path.join(SESSION_FOLDER, acc.get("steam_username").lower() + ".pkl")
+    # if not os.path.exists(steam_session_path):
+    #     logger.info("检测到这是该账号首次登录Steam，正在尝试登录...登录完成后会自动缓存账号信息")
+    # else:
+    #     logger.info("检测到缓存的steam_session, 正在尝试登录...")
+    #     try:
+    #         with open(steam_session_path, "rb") as f:
+    #             client = pickle.load(f)
+    #             if config["steam_login_ignore_ssl_error"]:
+    #                 logger.warning("警告: 已经关闭SSL验证, 请确保你的网络安全")
+    #                 client._session.verify = False
+    #                 requests.packages.urllib3.disable_warnings()
+    #             else:
+    #                 client._session.verify = True
+    #             if config["steam_local_accelerate"]:
+    #                 logger.info("已经启用Steamauto内置加速")
+    #                 client._session.auth = accelerator()
+    #             if client.is_ready():
+    #                 logger.info("登录成功")
+    #                 steam_client = client
+    #                 relogin = False
+    #     except requests.exceptions.ConnectionError as e:
+    #         handle_caught_exception(e)
+    #         logger.error("使用缓存的session登录失败!可能是网络异常")
+    #         steam_client = None
+    #     except EOFError as e:
+    #         handle_caught_exception(e)
+    #         shutil.rmtree(SESSION_FOLDER)
+    #         steam_client = None
+    #         logger.error("session文件异常.已删除session文件夹")
+    #     except AssertionError as e:
+    #         handle_caught_exception(e)
+    #         if config["steam_local_accelerate"]:
+    #             logger.error("由于内置加速问题,暂时无法登录.请稍等10分钟后再进行登录,或者关闭内置加速功能！")
+    #         else:
+    #             logger.error("未知登录错误,可能是由于网络问题?")
+    if relogin:
         try:
             logger.info("正在登录Steam...")
             if "use_proxies" not in config:
@@ -126,7 +121,6 @@ def login_to_steam():
                 logger.info("已经启用Steam代理")
                 if "proxies" not in config:
                     config["proxies"] = {}
-
                 if not isinstance(config["proxies"], dict):
                     logger.error("proxies格式错误，请检查配置文件")
                     pause()
@@ -137,26 +131,29 @@ def login_to_steam():
                     logger.error("代理服务器不可用，请检查配置文件")
                     pause()
                     return None
-                else:
-                    # logger.info("代理服务器可用")
-                    logger.warning("警告: 你已启用proxy, 该配置将被缓存，下次启动Steamauto时请确保proxy可用，或删除session文件夹下的缓存文件再启动")
-
-                client = SteamClient(api_key=acc.get("api_key"), proxies=config["proxies"])
-
-            else:
-                client = SteamClient(api_key=acc.get("api_key"))
-            if config["steam_login_ignore_ssl_error"]:
-                logger.warning("警告: 已经关闭SSL验证, 请确保你的网络安全")
-                client._session.verify = False
-                requests.packages.urllib3.disable_warnings()
-            if config["steam_local_accelerate"]:
-                logger.info("已经启用Steamauto内置加速")
-                client._session.auth = accelerator()
+                # else:
+                #     # logger.info("代理服务器可用")
+                #     logger.warning("警告: 你已启用proxy, 该配置将被缓存，下次启动Steamauto时请确保proxy可用，或删除session文件夹下的缓存文件再启动")
+            client = steam.Client(
+                proxy=config["proxies"] if config["use_proxies"] else None,
+            )
+            # TODO: 支持关闭SSL验证
+            # if config["steam_login_ignore_ssl_error"]:
+            #     logger.warning("警告: 已经关闭SSL验证, 请确保你的网络安全")
+            #     client._session.verify = False
+            #     requests.packages.urllib3.disable_warnings()
             logger.info("正在登录...")
-            SteamClient.login(client, acc.get("steam_username"), acc.get("steam_password"), STEAM_ACCOUNT_INFO_FILE_PATH)
-            with open(steam_session_path, "wb") as f:
-                pickle.dump(client, f)
-            logger.info("登录完成! 已经自动缓存session.")
+            asyncio.run(
+                client.login(
+                    acc.get("steam_username"),
+                    acc.get("steam_password"),
+                    shared_secret=acc.get("steam_shared_secret"),
+                    identity_secret=acc.get("steam_identity_secret"),
+                )
+            )
+            # with open(steam_session_path, "wb") as f:
+            #     pickle.dump(client, f)
+            logger.info("登录完成! ")
             steam_client = client
         except FileNotFoundError as e:
             handle_caught_exception(e)
@@ -171,14 +168,14 @@ def login_to_steam():
                 logger.error("登录失败. SSL证书验证错误! " "若您确定网络环境安全, 可尝试将配置文件中的steam_login_ignore_ssl_error设置为true\n")
             pause()
             return None
-        except (requests.exceptions.ConnectionError, TimeoutError) as e:
+        except (requests.exceptions.ConnectionError, TimeoutError, steam.SteamException) as e:
             handle_caught_exception(e)
             logger.error(
                 "网络错误! \n强烈建议使用Steamauto内置加速，仅需在配置文件中将steam_login_ignore_ssl_error和steam_local_accelerate设置为true即可使用 \n注意: 使用游戏加速器并不能解决问题. 请尝试使用Proxifier及其类似软件代理Python进程解决"
             )
             pause()
             return None
-        except (ValueError, ApiException) as e:
+        except (ValueError, steam.LoginError) as e:
             handle_caught_exception(e)
             logger.error("登录失败. 请检查" + STEAM_ACCOUNT_INFO_FILE_PATH + "的格式或内容是否正确!\n")
             pause()
@@ -188,18 +185,18 @@ def login_to_steam():
             logger.error("登录失败.可能原因如下：\n 1 代理问题，不建议同时开启proxy和内置代理，或者是代理波动，可以重试\n2 Steam服务器波动，无法登录")
             pause()
             return None
-        except CaptchaRequired as e:
-            handle_caught_exception(e)
-            logger.error(
-                "登录失败. 触发Steam风控, 请尝试更换加速器节点或使用手机热点等其它网络环境重试.\n"
-                "强烈建议使用Steamauto内置加速，仅需在配置文件中将steam_login_ignore_ssl_error和steam_local_accelerate设置为true即可使用.\n"
-                "这并不是一个程序问题, 请勿提交相关issue!(即使你已经开启Steamauto内置加速) "
-            )
-            pause()
-            return None
-        except InvalidCredentials as e:
-            handle_caught_exception(e)
-            logger.error("登录失败(账号或密码错误). 请检查" + STEAM_ACCOUNT_INFO_FILE_PATH + "中的账号密码是否正确\n")
+        # except CaptchaRequired as e:
+        #     handle_caught_exception(e)
+        #     logger.error(
+        #         "登录失败. 触发Steam风控, 请尝试更换加速器节点或使用手机热点等其它网络环境重试.\n"
+        #         "强烈建议使用Steamauto内置加速，仅需在配置文件中将steam_login_ignore_ssl_error和steam_local_accelerate设置为true即可使用.\n"
+        #         "这并不是一个程序问题, 请勿提交相关issue!(即使你已经开启Steamauto内置加速) "
+        #     )
+        #     pause()
+        #     return None
+        # except InvalidCredentials as e:
+        #     handle_caught_exception(e)
+        #     logger.error("登录失败(账号或密码错误). 请检查" + STEAM_ACCOUNT_INFO_FILE_PATH + "中的账号密码是否正确\n")
     return steam_client
 
 
@@ -275,27 +272,26 @@ def get_plugins_enabled(steam_client, steam_client_mutex):
     global config
     plugins_enabled = []
     if (
-            "buff_auto_accept_offer" in config
-            and "enable" in config["buff_auto_accept_offer"]
-            and config["buff_auto_accept_offer"]["enable"]
+        "buff_auto_accept_offer" in config
+        and "enable" in config["buff_auto_accept_offer"]
+        and config["buff_auto_accept_offer"]["enable"]
     ):
         buff_auto_accept_offer = BuffAutoAcceptOffer(logger, steam_client, steam_client_mutex, config)
         plugins_enabled.append(buff_auto_accept_offer)
-    if "buff_auto_on_sale" in config and "enable" in config["buff_auto_on_sale"] and config["buff_auto_on_sale"][
-        "enable"]:
+    if "buff_auto_on_sale" in config and "enable" in config["buff_auto_on_sale"] and config["buff_auto_on_sale"]["enable"]:
         buff_auto_on_sale = BuffAutoOnSale(logger, steam_client, steam_client_mutex, config)
         plugins_enabled.append(buff_auto_on_sale)
     if (
-            "uu_auto_accept_offer" in config
-            and "enable" in config["uu_auto_accept_offer"]
-            and config["uu_auto_accept_offer"]["enable"]
+        "uu_auto_accept_offer" in config
+        and "enable" in config["uu_auto_accept_offer"]
+        and config["uu_auto_accept_offer"]["enable"]
     ):
         uu_auto_accept_offer = UUAutoAcceptOffer(logger, steam_client, steam_client_mutex, config)
         plugins_enabled.append(uu_auto_accept_offer)
     if (
-            "steam_auto_accept_offer" in config
-            and "enable" in config["steam_auto_accept_offer"]
-            and config["steam_auto_accept_offer"]["enable"]
+        "steam_auto_accept_offer" in config
+        and "enable" in config["steam_auto_accept_offer"]
+        and config["steam_auto_accept_offer"]["enable"]
     ):
         steam_auto_accept_offer = SteamAutoAcceptOffer(logger, steam_client, steam_client_mutex, config)
         plugins_enabled.append(steam_auto_accept_offer)
@@ -376,9 +372,9 @@ def main():
         return 1
 
     with open(
-            STEAM_ACCOUNT_INFO_FILE_PATH,
-            "r",
-            encoding=get_encoding(STEAM_ACCOUNT_INFO_FILE_PATH),
+        STEAM_ACCOUNT_INFO_FILE_PATH,
+        "r",
+        encoding=get_encoding(STEAM_ACCOUNT_INFO_FILE_PATH),
     ) as f:
         api_key_in_config = json.load(f)["api_key"]
 

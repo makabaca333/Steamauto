@@ -3,6 +3,7 @@ import random
 import re
 
 import chardet
+import requests
 
 from utils.logger import logger
 from utils.static import config
@@ -54,12 +55,20 @@ def compare_version(ver1, ver2):
     return 0
 
 
-class accelerator:
-    def __call__(self, r):
-        domain_list = [
-            "steamcommunity-a.akamaihd.net",
-        ]
-        domain = re.search(r"(https?://)([^/\s]+)", r.url).group(2)
-        r.headers["Host"] = domain
-        r.url = re.sub(r"(https?://)([^/\s]+)(.*)", r"\1" + random.choice(domain_list) + r"\3", r.url)
-        return r
+def ping_proxy(proxy):
+    try:
+        requests.get("https://www.steamcommunity.com", proxies=proxy, timeout=10)
+        return True
+    except Exception:
+        return False
+
+# TODO: 内置加速
+# class accelerator:
+#     def __call__(self, r):
+#         domain_list = [
+#             "steamcommunity-a.akamaihd.net",
+#         ]
+#         domain = re.search(r"(https?://)([^/\s]+)", r.url).group(2)
+#         r.headers["Host"] = domain
+#         r.url = re.sub(r"(https?://)([^/\s]+)(.*)", r"\1" + random.choice(domain_list) + r"\3", r.url)
+#         return r
