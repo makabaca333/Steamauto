@@ -12,9 +12,9 @@ import requests
 import steam
 from requests.exceptions import SSLError
 
-from plugins.BuffAutoAcceptOffer import BuffAutoAcceptOffer
-from plugins.BuffAutoOnSale import BuffAutoOnSale
-from plugins.SteamAutoAcceptOffer import SteamAutoAcceptOffer
+# from plugins.BuffAutoAcceptOffer import BuffAutoAcceptOffer
+# from plugins.BuffAutoOnSale import BuffAutoOnSale
+# from plugins.SteamAutoAcceptOffer import SteamAutoAcceptOffer
 from plugins.UUAutoAcceptOffer import UUAutoAcceptOffer
 from utils.logger import handle_caught_exception
 from utils.static import (CONFIG_FILE_PATH, CONFIG_FOLDER,
@@ -144,7 +144,7 @@ def login_to_steam():
             #     requests.packages.urllib3.disable_warnings()
             logger.info("正在登录...")
             asyncio.run(
-                client.login(
+                client.start(
                     acc.get("steam_username"),
                     acc.get("steam_password"),
                     shared_secret=acc.get("steam_shared_secret"),
@@ -180,11 +180,11 @@ def login_to_steam():
             logger.error("登录失败. 请检查" + STEAM_ACCOUNT_INFO_FILE_PATH + "的格式或内容是否正确!\n")
             pause()
             return None
-        except (TypeError, AttributeError) as e:
-            handle_caught_exception(e)
-            logger.error("登录失败.可能原因如下：\n 1 代理问题，不建议同时开启proxy和内置代理，或者是代理波动，可以重试\n2 Steam服务器波动，无法登录")
-            pause()
-            return None
+        # except (TypeError, AttributeError) as e:
+        #     handle_caught_exception(e)
+        #     logger.error("登录失败.可能原因如下：\n 1 代理问题，不建议同时开启proxy和内置代理，或者是代理波动，可以重试\n2 Steam服务器波动，无法登录")
+        #     pause()
+        #     return None
         # except CaptchaRequired as e:
         #     handle_caught_exception(e)
         #     logger.error(
